@@ -78,7 +78,7 @@ func (o *Output) Write(resp *http.Response, responseBody io.Reader, cfg *config.
 
 		_, err = o.dataFileWriter.Write(b)
 	} else if responseBody == nil {
-		_, err = o.dataFileWriter.WriteString(responseToString(resp))
+		_, err = o.dataFileWriter.WriteString(ResponseToString(resp))
 	} else {
 		_, err = io.Copy(o.dataFileWriter, responseBody)
 	}
@@ -180,7 +180,7 @@ func (o *Output) DebugResponse(resp *http.Response) {
 		}
 	}
 
-	o.Debug("Response:\n----\n%s", responseToString(resp))
+	o.Debug("Response:\n----\n%s",ResponseToString(resp))
 }
 
 // requestToString converts HTTP request to a string.
@@ -193,8 +193,8 @@ func requestToString(req *http.Request) (str string) {
 	return b.String()
 }
 
-// responseToString converts HTTP response to a string.
-func responseToString(resp *http.Response) (str string) {
+// ResponseToString converts HTTP response to a string.
+func ResponseToString(resp *http.Response) (str string) {
 	return fmt.Sprintf(
 		"%s %s\r\n%s",
 		resp.Proto,

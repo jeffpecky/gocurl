@@ -3,11 +3,15 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/ameshkov/gocurl/internal/appversion"
 	"github.com/ameshkov/gocurl/internal/client"
@@ -34,7 +38,9 @@ func Main() {
 	}
 
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Failed to parse args: %v", err)
+		if !cfg.Silent {
+			_, _ = fmt.Fprintf(os.Stderr, "Failed to parse args: %v", err)
+		}
 
 		os.Exit(1)
 	}
@@ -45,7 +51,9 @@ func Main() {
 	}
 
 	if err := Run(cfg, out); err != nil {
-		out.Error("%v", err)
+		if !cfg.Silent {
+			out.Error("%v", err)
+		}
 		os.Exit(1)
 	}
 }
@@ -63,6 +71,15 @@ func Run(cfg *config.Config, out *output.Output) error {
 	req, err := client.NewRequest(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// --max-time: cap the whole operation via the request context.
+	if cfg.MaxTime > 0 {
+		var cancel context.CancelFunc
+		ctx := req.Context()
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(cfg.MaxTime)*time.Second)
+		defer cancel()
+		req = req.WithContext(ctx)
 	}
 
 	// This is a strange thing, but for the sake of logging WITH the request
@@ -126,7 +143,90 @@ func Run(cfg *config.Config, out *output.Output) error {
 	}
 
 	// Write the response contents to the output.
+	//
+	// -i/--include: prepend the status line and headers to the output body.
+	// -O/--remote-name: write the body to a file named after the URL path
+	// instead of stdout.
+	if cfg.Include && responseBody != nil {
+		responseBody = io.MultiReader(
+			strings.NewReader(output.ResponseToString(resp)),
+			responseBody,
+		)
+	}
+
+	if cfg.CookieJar != "" && resp.TLS != nil || cfg.CookieJar != "" {
+		_ = writeCookieJar(cfg.CookieJar, resp)
+	}
+
+	if cfg.RemoteName {
+		fname := remoteFileName(cfg.RequestURL)
+		f, ferr := os.Create(fname)
+		if ferr != nil {
+			return fmt.Errorf("failed to create output file %s: %w", fname, ferr)
+		}
+		defer func() {
+			_ = f.Close()
+		}()
+
+		if responseBody != nil {
+			if _, cerr := io.Copy(f, responseBody); cerr != nil {
+				return fmt.Errorf("failed to write to %s: %w", fname, cerr)
+			}
+		}
+
+		return nil
+	}
+
 	out.Write(resp, responseBody, cfg)
 
 	return nil
+}
+
+// writeCookieJar writes received cookies (from the Set-Cookie headers) to
+// the cookie jar file in Netscape format (-c/--cookie-jar).
+func writeCookieJar(fname string, resp *http.Response) (err error) {
+	host := resp.Request.URL.Hostname()
+
+	var b strings.Builder
+	b.WriteString("# Netscape HTTP Cookie File\n")
+	for _, sc := range resp.Header.Values("Set-Cookie") {
+		parts := strings.Split(sc, ";")
+		kv := strings.SplitN(parts[0], "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		secure := strings.Contains(strings.ToLower(sc), "secure")
+		b.WriteString(fmt.Sprintf("%s\tFALSE\t/\t%s\t0\t%s\t%s\n",
+			host,
+			secureFlag(secure),
+			kv[0],
+			kv[1],
+		))
+	}
+
+	return os.WriteFile(fname, []byte(b.String()), 0o644)
+}
+
+// secureFlag converts a boolean to the Netscape cookie file secure column.
+func secureFlag(secure bool) string {
+	if secure {
+		return "TRUE"
+	}
+
+	return "FALSE"
+}
+
+// remoteFileName derives the -O/--remote-name output filename from the URL
+// path: last path segment, defaulting to the hostname.
+func remoteFileName(u *url.URL) (fname string) {
+	trimmed := strings.Trim(u.Path, "/")
+	if trimmed != "" {
+		segs := strings.Split(trimmed, "/")
+		fname = segs[len(segs)-1]
+	}
+	if fname == "" {
+		fname = u.Hostname()
+	}
+
+	return fname
 }

@@ -19,6 +19,48 @@ type Options struct {
 	// Data specifies the data to be sent to the HTTP server.
 	Data string `short:"d" long:"data" description:"Sends the specified data to the HTTP server using content type application/x-www-form-urlencoded." value-name:"<data>"`
 
+	// DataRaw is like --data but @-file syntax is not interpreted.
+	DataRaw string `long:"data-raw" description:"Like --data, but @-file syntax is not interpreted." value-name:"<data>"`
+
+	// DataBinary is like --data, data is sent as-is (no URL encoding).
+	DataBinary string `long:"data-binary" description:"Like --data, but sends the data as-is without further processing." value-name:"<data>"`
+
+	// Get makes the request use GET with the data appended to the URL query.
+	Get bool `short:"G" long:"get" description:"Put the post data in the URL and use GET." optional:"yes" optional-value:"true"`
+
+	// RemoteName writes the output to a file named after the remote URL path.
+	RemoteName bool `short:"O" long:"remote-name" description:"Write output to a file named as the remote file (from the URL)." optional:"yes" optional-value:"true"`
+
+	// Location makes the tool follow redirects.
+	Location bool `short:"L" long:"location" description:"Follow redirects (maximum 10 hops)." optional:"yes" optional-value:"true"`
+
+	// User is the user:password pair for basic authentication.
+	User string `short:"u" long:"user" description:"Server user and password for basic authentication." value-name:"<user:password>"`
+
+	// Cookie is either a "name=value" pair or a file with cookies.
+	Cookie string `short:"b" long:"cookie" description:"Send cookies from string \"name=value\" or read them from a cookie file." value-name:"<data|filename>"`
+
+	// CookieJar is a file to write cookies to after the request.
+	CookieJar string `short:"c" long:"cookie-jar" description:"Write cookies to <filename> after the operation." value-name:"<filename>"`
+
+	// Compressed requests a compressed response using Accept-Encoding.
+	Compressed bool `long:"compressed" description:"Request compressed response (gzip, deflate, br)." optional:"yes" optional-value:"true"`
+
+	// UserAgent is a shortcut for -H "User-Agent: ..." (curl -A).
+	UserAgent string `short:"A" long:"user-agent" description:"User-Agent to send to the server (shortcut for -H \"User-Agent: ...\")." value-name:"<name>"`
+
+	// Referer is a shortcut for -H "Referer: ..." (curl -e).
+	Referer string `short:"e" long:"referer" description:"Referer to send to the server (shortcut for -H \"Referer: ...\")." value-name:"<URL>"`
+
+	// Silent suppresses progress meter and error messages (curl -s).
+	Silent bool `short:"s" long:"silent" description:"Silent mode. Don't output progress meter or error messages." optional:"yes" optional-value:"true"`
+
+	// Include includes the response headers in the output (curl -i).
+	Include bool `short:"i" long:"include" description:"Include the HTTP response headers in the output." optional:"yes" optional-value:"true"`
+
+	// MaxTime is the maximum total time in seconds for the whole operation.
+	MaxTime int `long:"max-time" description:"Maximum time in seconds that the whole operation is allowed to take." value-name:"<seconds>"`
+
 	// Headers is an array of HTTP headers (format is "header: value") to
 	// include in the request.
 	Headers []string `short:"H" long:"header" description:"Extra header to include in the request. Can be specified multiple times."`

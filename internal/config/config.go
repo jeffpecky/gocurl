@@ -31,6 +31,48 @@ type Config struct {
 	// Data specifies the data to be sent to the HTTP server.
 	Data string
 
+	// DataRaw is like Data but without @-file syntax.
+	DataRaw string
+
+	// DataBinary is like Data but sent as-is.
+	DataBinary string
+
+	// Get makes the request use GET with the data moved to the URL query.
+	Get bool
+
+	// RemoteName writes the output to a file named after the remote URL path.
+	RemoteName bool
+
+	// Location makes the tool follow redirects.
+	Location bool
+
+	// User is the user:password pair for basic authentication.
+	User string
+
+	// Cookie is either a "name=value" pair or a file with cookies.
+	Cookie string
+
+	// CookieJar is a file to write cookies to after the request.
+	CookieJar string
+
+	// Compressed requests a compressed response.
+	Compressed bool
+
+	// UserAgent is a shortcut for the User-Agent header.
+	UserAgent string
+
+	// Referer is a shortcut for the Referer header.
+	Referer string
+
+	// Silent suppresses error messages (curl -s).
+	Silent bool
+
+	// Include includes the response headers in the output (curl -i).
+	Include bool
+
+	// MaxTime is the maximum total time in seconds for the whole operation.
+	MaxTime int
+
 	// Headers is the HTTP headers that will be added to the request.
 	Headers http.Header
 
@@ -182,6 +224,20 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 		Head:           opts.Head,
 		Insecure:       opts.Insecure,
 		Data:           opts.Data,
+		DataRaw:        opts.DataRaw,
+		DataBinary:     opts.DataBinary,
+		Get:            opts.Get,
+		RemoteName:     opts.RemoteName,
+		Location:       opts.Location,
+		User:           opts.User,
+		Cookie:         opts.Cookie,
+		CookieJar:      opts.CookieJar,
+		Compressed:     opts.Compressed,
+		UserAgent:      opts.UserAgent,
+		Referer:        opts.Referer,
+		Silent:         opts.Silent,
+		Include:        opts.Include,
+		MaxTime:        opts.MaxTime,
 		OutputJSON:     opts.OutputJSON,
 		OutputPath:     opts.OutputPath,
 		ConnectTimeout: opts.ConnectTimeout,

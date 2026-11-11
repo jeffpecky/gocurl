@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 
 	"github.com/ameshkov/gocurl/internal/config"
 	"github.com/ameshkov/gocurl/internal/output"
@@ -179,9 +180,24 @@ func (t *uTransport) RoundTrip(r *http.Request) (resp *http.Response, err error)
 	scheme := r.URL.Scheme
 	if scheme != "https" {
 		// Plain HTTP: use the default transport path.
-		return httpBaseRoundTrip(r)
+		return t.httpBaseRoundTrip(r)
 	}
 
+	resp, err = t.roundTripTLS(r)
+	if err != nil {
+		return nil, err
+	}
+
+	// -L/--location: follow redirects on the TLS path as well.
+	if cfg := t.d.cfg; cfg.Location && resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return followRedirects(t, r, resp)
+	}
+
+	return resp, err
+}
+
+// roundTripTLS performs the request over a uTLS connection.
+func (t *uTransport) roundTripTLS(r *http.Request) (*http.Response, error) {
 	port := r.URL.Port()
 	if port == "" {
 		port = "443"
@@ -213,11 +229,72 @@ func (t *uTransport) RoundTrip(r *http.Request) (resp *http.Response, err error)
 	return h1RoundTrip(conn, r)
 }
 
-// httpBaseRoundTrip performs a plain HTTP request using a stock transport.
-func httpBaseRoundTrip(r *http.Request) (*http.Response, error) {
+// maxRedirects is the redirect limit matching curl's default (-L follows up
+// to 10 hops... actually 50; we use curl-impersonate's default).
+const maxRedirects = 10
+
+// followRedirects follows 3xx responses by re-issuing the request to the
+// Location target.  Only https and http schemes are supported.  Redirects
+// after POST downgrade to GET like curl does for 303 (and for 301/302 with a
+// POST body, curl historically does the same unless --post301 etc).
+func followRedirects(t *uTransport, firstReq *http.Request, firstResp *http.Response) (*http.Response, error) {
+	resp := firstResp
+	req := firstReq
+
+	for redirects := 0; redirects < maxRedirects; redirects++ {
+		loc := resp.Header.Get("Location")
+		resp.Body.Close()
+
+		if loc == "" {
+			return nil, fmt.Errorf("redirect with no Location header (status %d)", resp.StatusCode)
+		}
+
+		ref, err := url.Parse(loc)
+		if err != nil {
+			return nil, fmt.Errorf("invalid redirect Location %q: %w", loc, err)
+		}
+
+		newURL := req.URL.ResolveReference(ref)
+		if newURL.Scheme != "http" && newURL.Scheme != "https" {
+			return nil, fmt.Errorf("redirect to unsupported scheme %s", newURL.Scheme)
+		}
+
+		newReq := req.Clone(req.Context())
+		newReq.URL = newURL
+		newReq.Host = newURL.Host
+		// Downgrade to GET on redirects when there was a body.
+		if req.Method != http.MethodHead && req.Body != nil {
+			newReq.Method = http.MethodGet
+			newReq.Body = nil
+			newReq.ContentLength = 0
+		}
+
+		if newURL.Scheme != "https" {
+			resp, err = t.httpBaseRoundTrip(newReq)
+		} else {
+			resp, err = t.roundTripTLS(newReq)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+			return resp, nil
+		}
+	}
+
+	resp.Body.Close()
+
+	return nil, fmt.Errorf("too many redirects (limit %d)", maxRedirects)
+}
+
+// httpBaseRoundTrip performs a plain HTTP request using the client dialer
+// (which applies proxy/connect-to/resolve logic to the TCP dial).
+func (t *uTransport) httpBaseRoundTrip(r *http.Request) (*http.Response, error) {
 	tr := &http.Transport{
 		DisableCompression: true,
 		DisableKeepAlives:  true,
+		DialContext:        t.d.DialContext,
 	}
 
 	return tr.RoundTrip(r)
