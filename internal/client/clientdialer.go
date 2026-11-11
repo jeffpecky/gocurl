@@ -18,6 +18,7 @@ import (
 	"github.com/ameshkov/gocurl/internal/config"
 	"github.com/ameshkov/gocurl/internal/output"
 	"github.com/ameshkov/gocurl/internal/resolve"
+	utls "github.com/refraction-networking/utls"
 	"github.com/quic-go/quic-go"
 )
 
@@ -114,14 +115,36 @@ func (d *clientDialer) DialQUIC(
 }
 
 // handshakeTLS attempts to establish a TLS connection.
+//
+// Phase 0 spike: uses uTLS with a hardcoded Chrome ClientHelloSpec instead of
+// crypto/tls to prove the swap-point works.  This gets replaced by the profile
+// system in Phase 2.
 func (d *clientDialer) handshakeTLS(conn net.Conn) (tlsConn net.Conn, err error) {
-	tlsClient := tls.Client(conn, d.tlsConfig)
-	err = tlsClient.Handshake()
-	if err != nil {
-		return nil, err
+	uCfg := &utls.Config{
+		ServerName:         d.tlsConfig.ServerName,
+		NextProtos:         d.tlsConfig.NextProtos,
+		InsecureSkipVerify: d.tlsConfig.InsecureSkipVerify,
+		RootCAs:            d.tlsConfig.RootCAs,
+		Rand:               d.tlsConfig.Rand,
+	}
+	uConn := utls.UClient(conn, uCfg, utls.HelloChrome_Auto)
+
+	// The Chrome preset hardcodes its own ALPN (h2, http/1.1).  When the user
+	// forces --http1.1/--http2, replace the preset's ALPN extension with the
+	// forced protocol list.
+	if len(d.tlsConfig.NextProtos) > 0 && !nextProtosEqual(uCfg.NextProtos, presetChromeALPN) {
+		if err := setConnALPN(uConn, d.tlsConfig.NextProtos); err != nil {
+			return nil, err
+		}
 	}
 
-	return tlsClient, nil
+	err = uConn.HandshakeContext(context.Background())
+	if err != nil {
+		d.out.Debug("uTLS handshake failed to %s (SNI=%s ALPN=%v): %s", conn.RemoteAddr(), uCfg.ServerName, uCfg.NextProtos, err)
+		return nil, fmt.Errorf("utls handshake: %w", err)
+	}
+
+	return uConn, nil
 }
 
 // handshakeCTLS attempts to establish a TLS connection using Cloudflare's fork
@@ -129,6 +152,37 @@ func (d *clientDialer) handshakeTLS(conn net.Conn) (tlsConn net.Conn, err error)
 // standard library like ECH or post-quantum cryptography.
 func (d *clientDialer) handshakeCTLS(conn net.Conn) (tlsConn net.Conn, err error) {
 	return cfcrypto.Handshake(conn, d.tlsConfig, d.resolver, d.cfg, d.out)
+}
+
+// presetChromeALPN is the ALPN list hardcoded in the uTLS Chrome presets.
+var presetChromeALPN = []string{"h2", "http/1.1"}
+
+// nextProtosEqual compares two ALPN protocol lists for exact order equality.
+func nextProtosEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// setConnALPN overrides the ALPN extension of a UConn's ClientHello spec.
+// BuildHandshakeState must be called after to re-marshal the ClientHello.
+func setConnALPN(uConn *utls.UConn, protos []string) error {
+	if err := uConn.BuildHandshakeState(); err != nil {
+		return err
+	}
+	for _, ext := range uConn.Extensions {
+		if alpn, ok := ext.(*utls.ALPNExtension); ok {
+			alpn.AlpnProtocols = protos
+			return nil
+		}
+	}
+	return nil
 }
 
 // createDialFunc creates dialFunc that implements all the logic configured by

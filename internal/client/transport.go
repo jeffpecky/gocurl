@@ -4,11 +4,13 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 
 	"github.com/ameshkov/gocurl/internal/config"
 	"github.com/ameshkov/gocurl/internal/output"
+	utls "github.com/refraction-networking/utls"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
 )
@@ -153,18 +155,99 @@ func createH2Transport(d *clientDialer) (rt http.RoundTripper, err error) {
 
 // createH12Transport creates a http.RoundTripper to be used in HTTP/1.1 or
 // HTTP/2 client.
+//
+// Phase 0 spike: the TLS layer is now uTLS, whose conn is not *tls.Conn.
+// stdlib net/http only upgrades to HTTP/2 via TLSNextProto when the conn is
+// exactly *tls.Conn, so instead we dial first, check the negotiated ALPN
+// protocol ourselves and route to the x/net http2.Transport (which accepts
+// any conn with a ConnectionState method) or fall back to HTTP/1.1.
 func createH12Transport(d *clientDialer) (rt http.RoundTripper, err error) {
+	return &uTransport{d: d}, nil
+}
+
+// uTransport is a RoundTripper that dials TLS with uTLS and routes the
+// connection to HTTP/2 or HTTP/1.1 based on the negotiated ALPN protocol.
+type uTransport struct {
+	d *clientDialer
+}
+
+// type check
+var _ http.RoundTripper = (*uTransport)(nil)
+
+// RoundTrip implements http.RoundTripper for *uTransport.
+func (t *uTransport) RoundTrip(r *http.Request) (resp *http.Response, err error) {
+	scheme := r.URL.Scheme
+	if scheme != "https" {
+		// Plain HTTP: use the default transport path.
+		return httpBaseRoundTrip(r)
+	}
+
+	port := r.URL.Port()
+	if port == "" {
+		port = "443"
+	}
+	addr := net.JoinHostPort(r.URL.Hostname(), port)
+
+	conn, err := t.d.DialTLSContext(r.Context(), "tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("dialTLS %s: %w", addr, err)
+	}
+
+	proto := ""
+	if u, ok := conn.(*utls.UConn); ok {
+		proto = u.ConnectionState().NegotiatedProtocol
+	}
+
+	if proto == "h2" {
+		tr := &http2.Transport{DisableCompression: true}
+		clientConn, err := tr.NewClientConn(conn)
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+
+		return clientConn.RoundTrip(r)
+	}
+
+	// HTTP/1.1 over the uTLS connection.
+	return h1RoundTrip(conn, r)
+}
+
+// httpBaseRoundTrip performs a plain HTTP request using a stock transport.
+func httpBaseRoundTrip(r *http.Request) (*http.Response, error) {
 	tr := &http.Transport{
 		DisableCompression: true,
 		DisableKeepAlives:  true,
-		DialContext:        d.DialContext,
-		DialTLSContext:     d.DialTLSContext,
 	}
 
-	// Enable HTTP/2 support explicitly.
-	_ = http2.ConfigureTransport(tr)
+	return tr.RoundTrip(r)
+}
 
-	return tr, nil
+// h1RoundConn is a net.Conn wrapper that reuses an already-established TLS
+// connection with an http.Transport.
+type h1RoundConn struct {
+	net.Conn
+}
+
+// RoundTrip performs an HTTP/1.1 request over the pre-established TLS conn.
+func h1RoundTrip(conn net.Conn, r *http.Request) (*http.Response, error) {
+	tr := &http.Transport{
+		DisableCompression: true,
+		DisableKeepAlives:  true,
+		// Must hand the conn over via DialTLSContext: for https URLs the
+		// transport wraps DialContext conns in its own tls.Client, which
+		// would double the TLS layer.
+		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return conn, nil
+		},
+	}
+
+	resp, err := tr.RoundTrip(r)
+	if err != nil {
+		conn.Close()
+	}
+
+	return resp, err
 }
 
 // getMethod returns HTTP method depending on the arguments.
