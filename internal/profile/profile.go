@@ -28,17 +28,25 @@ type Profile struct {
 	// the ALPN list the browser offers.
 	TLS TLSProfile `json:"tls"`
 
-	// H2 is the HTTP/2 fingerprint section (SETTINGS/frame order).  Filled in
-	// by the Phase 3 work; empty means "use Go defaults".
+	// H2 is the HTTP/2 fingerprint section (SETTINGS/frame order).
 	H2 *H2Profile `json:"h2,omitempty"`
+
+	// HTTP is the application-level HTTP fingerprint section: the User-Agent
+	// and default request headers the browser sends.  When impersonation is
+	// active, these are used as request defaults (explicit -H flags and
+	// -A/-e win).
+	HTTP *HTTPProfile `json:"http,omitempty"`
 
 	// Default marks the profile used when --impersonate is omitted.
 	Default bool `json:"default"`
 
 	// Fingerprints are the declared fingerprint hashes of this profile,
-	// verified by the selftest (selftest/verify.go).  An empty map skips
-	// verification (e.g. for stale or experimental profiles).
-	Fingerprints map[string]string `json:"fingerprints,omitempty"`
+	// verified by the selftest (selftest/verify.go).  Values may be a single
+	// hash or, for profiles whose preset flaps between two valid wire states
+	// across handshakes (e.g. uTLS's Chrome 120 conditional ALPS), a list of
+	// acceptable hashes.  An empty map skips verification (e.g. for stale or
+	// experimental profiles).
+	Fingerprints map[string]FingerprintValue `json:"fingerprints,omitempty"`
 }
 
 // TLSProfile is the TLS section of a profile.
@@ -73,6 +81,18 @@ type H2Profile struct {
 type H2Setting struct {
 	ID  uint16 `json:"id"`
 	Val uint32 `json:"val"`
+}
+
+// HTTPProfile is the application-level HTTP section of a profile.
+type HTTPProfile struct {
+	// UserAgent is the User-Agent the browser sends (also used for HTTP/1.1
+	// requests; the TLS/H2 layers don't depend on it).
+	UserAgent string `json:"user_agent"`
+
+	// DefaultHeaders are the browser's default request headers (name: value
+	// strings, in wire order).  User-supplied -H headers win; these fill in
+	// the ones the user didn't specify.
+	DefaultHeaders []string `json:"default_headers,omitempty"`
 }
 
 // registry is the parsed set of all embedded profiles, keyed by name.
@@ -135,6 +155,39 @@ func Names() (names []string) {
 	sort.Strings(names)
 
 	return names
+}
+
+// FingerprintValue is a declared fingerprint: either a single hash or a list
+// of acceptable hashes (for presets with more than one valid wire state).
+type FingerprintValue struct {
+	// Any is the list of acceptable hashes; any match passes.
+	Any []string
+}
+
+// UnmarshalJSON accepts both "hash" and ["hash1","hash2"] forms.
+func (f *FingerprintValue) UnmarshalJSON(b []byte) error {
+	var single string
+	if err := json.Unmarshal(b, &single); err == nil {
+		f.Any = []string{single}
+		return nil
+	}
+
+	var multiple []string
+	if err := json.Unmarshal(b, &multiple); err != nil {
+		return err
+	}
+	f.Any = multiple
+
+	return nil
+}
+
+// MarshalJSON writes the value back in its minimal form.
+func (f FingerprintValue) MarshalJSON() ([]byte, error) {
+	if len(f.Any) == 1 {
+		return json.Marshal(f.Any[0])
+	}
+
+	return json.Marshal(f.Any)
 }
 
 // H2Fingerprint converts the profile's HTTP/2 section into the wire-level

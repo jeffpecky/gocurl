@@ -38,6 +38,9 @@ type Config struct {
 	// DataBinary is like Data but sent as-is.
 	DataBinary string
 
+	// Form is the list of multipart form fields (curl -F).
+	Form []string
+
 	// Get makes the request use GET with the data moved to the URL query.
 	Get bool
 
@@ -70,6 +73,9 @@ type Config struct {
 
 	// Include includes the response headers in the output (curl -i).
 	Include bool
+
+	// WriteOut is the curl --write-out format string.
+	WriteOut string
 
 	// MaxTime is the maximum total time in seconds for the whole operation.
 	MaxTime int
@@ -237,6 +243,7 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 		Data:           opts.Data,
 		DataRaw:        opts.DataRaw,
 		DataBinary:     opts.DataBinary,
+		Form:           opts.Form,
 		Get:            opts.Get,
 		RemoteName:     opts.RemoteName,
 		Location:       opts.Location,
@@ -248,6 +255,7 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 		Referer:        opts.Referer,
 		Silent:         opts.Silent,
 		Include:        opts.Include,
+		WriteOut:       opts.WriteOut,
 		MaxTime:        opts.MaxTime,
 		OutputJSON:     opts.OutputJSON,		OutputPath:     opts.OutputPath,
 		ConnectTimeout: opts.ConnectTimeout,

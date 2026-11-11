@@ -34,5 +34,14 @@
         "ja3_hash": "656b9a2f4de6ed4909e157482860ab3d",
         "ja4": "t13d2613h2_2802a3db6c62_845d286b0d67",
         "akamai_fingerprint_hash": "8531711d094abb92e246c66e31f07e22"
+    },
+    "http": {
+        "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1",
+        "default_headers": [
+            "upgrade-insecure-requests: 1",
+            "accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "accept-encoding: gzip, deflate",
+            "accept-language: en-us"
+        ]
     }
 }

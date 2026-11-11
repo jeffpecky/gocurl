@@ -23,7 +23,9 @@ import (
 
 // Main is the entry point for the command-line tool.
 func Main() {
-	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+	// curl compat: --version and -V print the version.  -v is verbose — it
+	// must NOT be treated as --version (curl's own version short flag is -V).
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-V") {
 		fmt.Printf("gocurl version: %s\n", appversion.Version())
 
 		os.Exit(0)
@@ -54,14 +56,58 @@ func Main() {
 		if !cfg.Silent {
 			out.Error("%v", err)
 		}
-		os.Exit(1)
+
+		os.Exit(exitCodeFor(err))
 	}
+}
+
+// exitCodeFor maps request errors to curl's exit codes (see
+// https://everything.curl.dev/cmdline/exitcode.html).  Only the codes that
+// can arise from this tool's operations are mapped; anything else is
+// curl's generic failure code 1.
+func exitCodeFor(err error) (code int) {
+	errStr := err.Error()
+
+	switch {
+	// 6: couldn't resolve host.
+	case strings.Contains(errStr, "no such host"),
+		strings.Contains(errStr, "NXDOMAIN"):
+		return 6
+
+	// 28: operation timeout (--max-time expiry).  Must precede the
+	// connection-failure mapping: deadline expiries surface as generic
+	// network errors ("use of closed network connection", "i/o timeout")
+	// depending on which socket op was interrupted.
+	case strings.Contains(errStr, "context deadline exceeded"),
+		strings.Contains(errStr, "deadline exceeded"),
+		strings.Contains(errStr, "use of closed network connection"):
+		return 28
+
+	// 7: couldn't connect to server (refused, unreachable, timeouts during
+	// the connection phase).
+	case strings.Contains(errStr, "connection refused"),
+		strings.Contains(errStr, "no route to host"),
+		strings.Contains(errStr, "unreachable"),
+		strings.Contains(errStr, "i/o timeout"),
+		strings.Contains(errStr, "connection reset"):
+		return 7
+
+	// 47: too many redirects.
+	case strings.Contains(errStr, "too many redirects"):
+		return 47
+	}
+
+	return 1
 }
 
 // Run executes the main logic of the gocurl command with the provided config
 // and output. This function is extracted to make it testable.
 func Run(cfg *config.Config, out *output.Output) error {
 	out.Debug("Starting gocurl %s with arguments:\n%s", appversion.Version(), cfg.RawOptions)
+
+	out.CurlInfo("Request started; target=%s impersonate=%s", cfg.RequestURL, cfg.Impersonate)
+
+	started := time.Now()
 
 	transport, err := client.NewTransport(cfg, out)
 	if err != nil {
@@ -87,7 +133,11 @@ func Run(cfg *config.Config, out *output.Output) error {
 	//
 	// TODO(ameshkov): refactor this.
 	cloneReq, _ := client.NewRequest(cfg)
-	out.DebugRequest(cloneReq)
+
+	// -v prints curl-format request/response dumps.  gocurl's own extended
+	// dump stays behind --json-output pipelines (DebugRequest is only called
+	// when the curl format is not wanted).
+	out.CurlRequest(cloneReq, cfg.RawHeaders)
 
 	resp, err := transport.RoundTrip(req)
 	if err != nil {
@@ -119,7 +169,7 @@ func Run(cfg *config.Config, out *output.Output) error {
 		responseBody = nil
 	}
 
-	out.DebugResponse(resp)
+	out.CurlResponse(resp)
 
 	// WebSocket is processed differently. If request body is supplied with the
 	// "data" command-line argument, it is sent as a text frame, and then it
@@ -179,7 +229,47 @@ func Run(cfg *config.Config, out *output.Output) error {
 
 	out.Write(resp, responseBody, cfg)
 
+	// -w/--write-out: print the formatted string after the transfer, like
+	// curl does.
+	if cfg.WriteOut != "" {
+		fmt.Print(renderWriteOut(cfg.WriteOut, resp, started))
+	}
+
 	return nil
+}
+
+// renderWriteOut expands curl's --write-out variables.  Supported:
+// %{http_code}, %{url_effective}, %{time_total}, %{time_connect},
+// %{size_download}; \n, \r, \t literals.
+func renderWriteOut(format string, resp *http.Response, started time.Time) (s string) {
+	total := time.Since(started).Seconds()
+	connect := 0.0
+	if resp.TLS != nil {
+		// TLS handshake time is not tracked separately; report it as part of
+		// the connection time (curl's time_connect is TCP only — we don't
+		// have that signal here, so use 0 unless we know better).
+		connect = 0.0
+	}
+	size := 0
+	if resp.Body != nil {
+		// Body size unknown post-read; use ContentLength when available.
+		if resp.ContentLength > 0 {
+			size = int(resp.ContentLength)
+		}
+	}
+
+	replacer := strings.NewReplacer(
+		"%{http_code}", fmt.Sprintf("%03d", resp.StatusCode),
+		"%{url_effective}", resp.Request.URL.String(),
+		"%{time_total}", fmt.Sprintf("%.6f", total),
+		"%{time_connect}", fmt.Sprintf("%.6f", connect),
+		"%{size_download}", fmt.Sprintf("%d", size),
+		"\\n", "\n",
+		"\\r", "\r",
+		"\\t", "\t",
+	)
+
+	return replacer.Replace(format)
 }
 
 // writeCookieJar writes received cookies (from the Set-Cookie headers) to

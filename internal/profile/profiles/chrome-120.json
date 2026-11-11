@@ -35,8 +35,24 @@
         "pseudo_header_order": "amsp"
     },
     "fingerprints": {
-        "ja4": "t13d1516h2_8daaf6152771_02713d6af862",
+        "ja4": [
+            "t13d1516h2_8daaf6152771_02713d6af862",
+            "t13d1517h2_8daaf6152771_b1ff8ab2d16f"
+        ],
         "akamai_fingerprint_hash": "c14c38ed6f422c2b0046de8ec45336a7",
-        "ja3_note": "unstable: Chrome 106+ shuffles extensions per handshake (real browser behavior); pinned by ja4 + akamai hash"
+        "ja3_note": "unstable: Chrome 106+ shuffles extensions per handshake (real browser behavior); pinned by ja4 + akamai hash",
+        "ja4_note": "two acceptable wire states: uTLS Chrome_120 conditionally omits the ALPS (application_settings_old) extension across handshakes"
+    },
+    "http": {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "default_headers": [
+            "sec-ch-ua: \"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"",
+            "sec-ch-ua-mobile: ?0",
+            "sec-ch-ua-platform: \"Windows\"",
+            "upgrade-insecure-requests: 1",
+            "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "accept-encoding: gzip, deflate, br, zstd",
+            "accept-language: en-US,en;q=0.9"
+        ]
     }
 }

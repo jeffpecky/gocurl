@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
@@ -11,16 +12,18 @@ import (
 	"github.com/ameshkov/gocurl/internal/appversion"
 	"github.com/ameshkov/gocurl/internal/client/websocket"
 	"github.com/ameshkov/gocurl/internal/config"
+	"github.com/ameshkov/gocurl/internal/profile"
 )
 
 // NewRequest creates a new *http.Request based on *cmd.Options.
 func NewRequest(cfg *config.Config) (req *http.Request, err error) {
 	var bodyStream io.Reader
+	var contentType string
 
 	// Do not add body for WebSocket requests as in this case --data is handled
 	// differently, and it is sent after the handshake.
 	if !websocket.IsWebSocket(cfg.RequestURL) {
-		bodyStream, err = createBody(cfg)
+		bodyStream, contentType, err = createBody(cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -50,8 +53,18 @@ func NewRequest(cfg *config.Config) (req *http.Request, err error) {
 		return nil, err
 	}
 
+	// -F implies POST like in curl.
+	if len(cfg.Form) > 0 && method == http.MethodGet {
+		req.Method = http.MethodPost
+	}
+
 	addHeaders(req, cfg)
 	addBodyHeaders(req, cfg)
+
+	// -F sets its own Content-Type (multipart boundary).
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 
 	// -u/--user: basic authentication.
 	if cfg.User != "" {
@@ -59,10 +72,10 @@ func NewRequest(cfg *config.Config) (req *http.Request, err error) {
 		req.SetBasicAuth(user, pass)
 	}
 
-	// Only set default User-Agent if it was not set by the user.
-	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", fmt.Sprintf("gocurl/%s", appversion.Version()))
-	}
+	// Default User-Agent and headers: impersonating uses the active
+	// profile's browser values; otherwise the tool identifies itself.
+	// Explicit user flags always win.
+	applyProfileDefaults(req, cfg)
 
 	if ur := websocket.UpgradeWebSocket(req); ur != nil {
 		req = ur
@@ -71,9 +84,56 @@ func NewRequest(cfg *config.Config) (req *http.Request, err error) {
 	return req, err
 }
 
+// applyProfileDefaults fills in the User-Agent and default headers from the
+// active impersonation profile for anything the user did not set explicitly.
+// When impersonation is off, gocurl's own User-Agent is set (it must not
+// pretend to be something it isn't).
+func applyProfileDefaults(req *http.Request, cfg *config.Config) {
+	prof, err := profile.Get(cfg.Impersonate)
+	if err != nil || prof == nil || prof.HTTP == nil {
+		if req.Header.Get("User-Agent") == "" {
+			req.Header.Set("User-Agent", fmt.Sprintf("gocurl/%s", appversion.Version()))
+		}
+		return
+	}
+
+	if req.Header.Get("User-Agent") == "" && prof.HTTP.UserAgent != "" {
+		req.Header.Set("User-Agent", prof.HTTP.UserAgent)
+	}
+
+	for _, raw := range prof.HTTP.DefaultHeaders {
+		name, value, _ := strings.Cut(raw, ":")
+		if name == "" || req.Header.Get(name) != "" {
+			continue
+		}
+		req.Header.Set(name, strings.TrimSpace(value))
+	}
+}
+
 // createBody creates body stream if it's required by the command-line
-// arguments.  Priority: --data-raw, --data-binary, --data.
-func createBody(cfg *config.Config) (body io.Reader, err error) {
+// arguments.  Priority: -F (multipart), --data-raw, --data-binary, --data.
+// Returns the body reader plus an optional Content-Type that must be set on
+// the request (multipart boundary).
+func createBody(cfg *config.Config) (body io.Reader, contentType string, err error) {
+	if len(cfg.Form) > 0 {
+		buf := &bytes.Buffer{}
+		w := multipart.NewWriter(buf)
+		for _, field := range cfg.Form {
+			name, value, _ := strings.Cut(field, "=")
+			if name == "" {
+				return nil, "", fmt.Errorf("invalid -F field %q, expected name=value", field)
+			}
+			if err := w.WriteField(name, value); err != nil {
+				return nil, "", err
+			}
+		}
+		if err := w.Close(); err != nil {
+			return nil, "", err
+		}
+
+		return buf, w.FormDataContentType(), nil
+	}
+
 	data := cfg.Data
 	if cfg.DataRaw != "" {
 		data = cfg.DataRaw
@@ -82,10 +142,10 @@ func createBody(cfg *config.Config) (body io.Reader, err error) {
 	}
 
 	if data == "" {
-		return nil, nil
+		return nil, "", nil
 	}
 
-	return bytes.NewBufferString(data), nil
+	return bytes.NewBufferString(data), "", nil
 }
 
 // bodyData returns the effective request body data (--data/--data-raw/

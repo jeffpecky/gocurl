@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/ameshkov/gocurl/internal/client/tlsh2"
@@ -224,13 +225,21 @@ func (t *uTransport) roundTripTLS(r *http.Request) (*http.Response, error) {
 	}
 
 	if proto == "h2" {
+		if u, ok := conn.(*utls.UConn); ok {
+			st := u.ConnectionState()
+			t.d.out.CurlInfo("Connected to %s (%s) port %s", r.URL.Hostname(), conn.RemoteAddr(), portOr443(r.URL))
+			t.d.out.CurlInfo("ALPN: server accepted h2 (%s)", tls.VersionName(uint16(st.Version)))
+		}
+
 		// If the active profile carries an HTTP/2 fingerprint, use the
 		// fingerprint-exact single-request framer instead of the standard
 		// transport (whose SETTINGS/window/header order is fixed).
 		if fp := t.h2Fingerprint(); fp != nil {
+			t.d.out.CurlInfo("using HTTP/2 with profile fingerprint")
 			return t.roundTripH2Fingerprint(conn, r, fp)
 		}
 
+		t.d.out.CurlInfo("using HTTP/2")
 		tr := &http2.Transport{DisableCompression: true}
 		clientConn, err := tr.NewClientConn(conn)
 		if err != nil {
@@ -242,7 +251,17 @@ func (t *uTransport) roundTripTLS(r *http.Request) (*http.Response, error) {
 	}
 
 	// HTTP/1.1 over the uTLS connection.
+	t.d.out.CurlInfo("using HTTP/1.1")
 	return h1RoundTrip(conn, r)
+}
+
+// portOr443 returns the URL's port as a string, defaulting to 443.
+func portOr443(u *url.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+
+	return "443"
 }
 
 // h2Fingerprint returns the HTTP/2 fingerprint of the active profile, or nil
@@ -260,6 +279,17 @@ func (t *uTransport) h2Fingerprint() *profile.H2FingerprintSpec {
 	return prof.H2Fingerprint()
 }
 
+// profileDefaultHeaderOrder returns the active profile's default header
+// strings ("name: value", declared order) or nil when impersonation is off.
+func (t *uTransport) profileDefaultHeaderOrder() []string {
+	prof, err := profile.Get(t.d.cfg.Impersonate)
+	if err != nil || prof == nil || prof.HTTP == nil {
+		return nil
+	}
+
+	return prof.HTTP.DefaultHeaders
+}
+
 // roundTripH2Fingerprint sends the request over the established TLS conn
 // using the fingerprint-exact framer and converts the response back to
 // *http.Response.
@@ -275,24 +305,37 @@ func (t *uTransport) roundTripH2Fingerprint(conn net.Conn, r *http.Request, fp *
 	}
 
 	fields := make([]tlsh2.HeaderField, 0, len(r.Header))
-	// Header order: the raw -H/--header order from the config, followed by
-	// defaults the request carried that were not specified explicitly.
+	// Header wire order: user -H/--header order first, then the profile's
+	// default headers in their declared order, then any remaining headers
+	// the request carries (sorted for determinism — Go map iteration order
+	// must never reach the wire).
 	seen := map[string]bool{}
-	for _, raw := range t.d.cfg.RawHeaders {
+	addField := func(raw string) {
 		name, value, _ := strings.Cut(raw, ":")
 		name = strings.ToLower(strings.TrimSpace(name))
 		if name == "" || seen[name] {
-			continue
+			return
 		}
 		seen[name] = true
 		fields = append(fields, tlsh2.HeaderField{Name: name, Value: strings.TrimSpace(value)})
 	}
-	for name, vals := range r.Header {
-		if seen[strings.ToLower(name)] {
-			continue
+	for _, raw := range t.d.cfg.RawHeaders {
+		addField(raw)
+	}
+	for _, raw := range t.profileDefaultHeaderOrder() {
+		addField(raw)
+	}
+	// Anything the request still carries (e.g. headers added programmatically
+	// like Content-Type from -d) in deterministic order.
+	var rest []string
+	for name := range r.Header {
+		if !seen[strings.ToLower(name)] {
+			rest = append(rest, name)
 		}
-		seen[strings.ToLower(name)] = true
-		fields = append(fields, tlsh2.HeaderField{Name: strings.ToLower(name), Value: vals[0]})
+	}
+	sort.Strings(rest)
+	for _, name := range rest {
+		fields = append(fields, tlsh2.HeaderField{Name: strings.ToLower(name), Value: r.Header.Get(name)})
 	}
 
 	h2req := &tlsh2.Request{

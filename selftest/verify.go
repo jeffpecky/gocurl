@@ -111,8 +111,15 @@ func verifyProfile(bin string, prof *profile.Profile, endpoint string) error {
 			// assertions — skip them.
 			continue
 		}
-		if got != declared {
-			mismatches = append(mismatches, fmt.Sprintf("%s: declared %s, actual %s", key, declared, got))
+		matched := false
+		for _, acceptable := range declared.Any {
+			if got == acceptable {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			mismatches = append(mismatches, fmt.Sprintf("%s: declared %v, actual %s", key, declared.Any, got))
 		}
 	}
 	if len(mismatches) > 0 {

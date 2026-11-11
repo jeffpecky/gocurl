@@ -118,11 +118,32 @@ func Do(ctx context.Context, conn net.Conn, fp *Fingerprint, req *Request) (resp
 			resp, err = nil, fmt.Errorf("h2 protocol error: %v", r)
 		}
 		_ = conn.Close()
+		// If the operation's context expired, report that — the raw socket
+		// error from the interrupted op ("i/o timeout", "connection reset")
+		// would otherwise misclassify the failure.
+		if err != nil && ctx.Err() != nil {
+			err = ctx.Err()
+		}
 	}()
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+
+	// Make the whole operation bound by ctx: setting the deadline unblocks
+	// any in-flight read/write when --max-time expires.
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	stopWatchdog := make(chan struct{})
+	defer close(stopWatchdog)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.Close()
+		case <-stopWatchdog:
+		}
+	}()
 
 	w := newFrameWriter(conn)
 

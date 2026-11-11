@@ -25,6 +25,10 @@ type Options struct {
 	// DataBinary is like --data, data is sent as-is (no URL encoding).
 	DataBinary string `long:"data-binary" description:"Like --data, but sends the data as-is without further processing." value-name:"<data>"`
 
+	// Form is a list of multipart form fields (curl -F).  Only simple
+	// "name=value" pairs are supported (no @file uploads).
+	Form []string `short:"F" long:"form" description:"Send multipart form data. Supports basic \"name=value\" pairs (no @file uploads). Can be specified multiple times." value-name:"<name=value>"`
+
 	// Get makes the request use GET with the data appended to the URL query.
 	Get bool `short:"G" long:"get" description:"Put the post data in the URL and use GET." optional:"yes" optional-value:"true"`
 
@@ -57,6 +61,11 @@ type Options struct {
 
 	// Include includes the response headers in the output (curl -i).
 	Include bool `short:"i" long:"include" description:"Include the HTTP response headers in the output." optional:"yes" optional-value:"true"`
+
+	// WriteOut formats output per curl's --write-out syntax after the
+	// transfer (supports %{http_code}, %{url_effective}, %{time_total},
+	// %{time_connect}, %{size_download} and \n\r\t literals).
+	WriteOut string `short:"w" long:"write-out" description:"Use output FORMAT after transfer, like curl's --write-out (http_code, url_effective, time_total, time_connect, size_download)." value-name:"<format>"`
 
 	// MaxTime is the maximum total time in seconds for the whole operation.
 	MaxTime int `long:"max-time" description:"Maximum time in seconds that the whole operation is allowed to take." value-name:"<seconds>"`

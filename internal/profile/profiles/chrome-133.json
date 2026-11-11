@@ -39,5 +39,17 @@
         "ja4": "t13d1516h2_8daaf6152771_d8a2da3f94cd",
         "akamai_fingerprint_hash": "c14c38ed6f422c2b0046de8ec45336a7",
         "ja3_note": "unstable: Chrome 106+ shuffles extensions per handshake (real browser behavior); pinned by ja4 + akamai hash"
+    },
+    "http": {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "default_headers": [
+            "sec-ch-ua: \"\"Chromium\";v=\"133\", \"Not(A:Brand\";v=\"24\"\"",
+            "sec-ch-ua-mobile: ?0",
+            "sec-ch-ua-platform: \"Windows\"",
+            "upgrade-insecure-requests: 1",
+            "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "accept-encoding: gzip, deflate, br, zstd",
+            "accept-language: en-US,en;q=0.9"
+        ]
     }
 }

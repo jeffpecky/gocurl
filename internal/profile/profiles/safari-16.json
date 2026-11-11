@@ -34,5 +34,14 @@
         "ja3_hash": "773906b0efdefa24a7f2b8eb6985bf37",
         "ja4": "t13d2014h2_a09f3c656075_14788d8d241b",
         "akamai_fingerprint_hash": "8531711d094abb92e246c66e31f07e22"
+    },
+    "http": {
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+        "default_headers": [
+            "upgrade-insecure-requests: 1",
+            "accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "accept-encoding: gzip, deflate",
+            "accept-language: en-us"
+        ]
     }
 }
