@@ -82,6 +82,11 @@ type Config struct {
 	// Headers is the HTTP headers that will be added to the request.
 	Headers http.Header
 
+	// RawHeaders is the header strings exactly as given on the command line
+	// (order preserved) — used by the H2 fingerprint path where header order
+	// matters.
+	RawHeaders []string
+
 	// ProxyURL is a URL of a proxy to use with this connection.
 	ProxyURL *url.URL
 
@@ -298,6 +303,7 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 
 	if len(opts.Headers) > 0 {
 		cfg.Headers = createHeaders(opts.Headers)
+		cfg.RawHeaders = opts.Headers
 	}
 
 	if opts.TLSv12 {

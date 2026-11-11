@@ -47,18 +47,21 @@ type TLSProfile struct {
 	ALPN []string `json:"alpn"`
 }
 
-// H2Profile is the HTTP/2 section of a profile (Phase 3).
+// H2Profile is the HTTP/2 section of a profile.
 type H2Profile struct {
 	// Settings is the ordered list of SETTINGS frame entries sent by the
-	// browser, e.g. [{"id":1,"val":1024}, ...].
+	// browser right after the connection preface, e.g. [{"id":1,"val":65536},
+	// ...].
 	Settings []H2Setting `json:"settings"`
 
 	// WindowUpdate is the connection-level WINDOW_UPDATE increment (0 = no
 	// frame).
 	WindowUpdate uint32 `json:"window_update,omitempty"`
 
-	// Priority / pseudo-header order knobs go here in Phase 3.
-	PseudoHeaderOrder []string `json:"pseudo_header_order,omitempty"`
+	// PseudoHeaderOrder is the wire order of request pseudo-headers as single
+	// letters: m(:method), s(:scheme), a(:authority), p(:path).  Browsers
+	// send "amsp"-style orders; curl-impersonate profiles use the same.
+	PseudoHeaderOrder string `json:"pseudo_header_order"`
 }
 
 // H2Setting is a single HTTP/2 SETTINGS entry.
@@ -127,6 +130,39 @@ func Names() (names []string) {
 	sort.Strings(names)
 
 	return names
+}
+
+// H2Fingerprint converts the profile's HTTP/2 section into the wire-level
+// fingerprint for tlsh2.  A profile without an H2 section yields nil, meaning
+// "use the standard Go transport" (no H2 fingerprint control).
+func (p *Profile) H2Fingerprint() *H2FingerprintSpec {
+	if p.H2 == nil {
+		return nil
+	}
+
+	fp := &H2FingerprintSpec{
+		ConnWindowUpdate:  p.H2.WindowUpdate,
+		PseudoHeaderOrder: p.H2.PseudoHeaderOrder,
+	}
+	for _, s := range p.H2.Settings {
+		fp.Settings = append(fp.Settings, H2SettingWire{ID: s.ID, Val: s.Val})
+	}
+
+	return fp
+}
+
+// H2FingerprintSpec is the wire-level HTTP/2 fingerprint (decoupled from the
+// JSON shape).
+type H2FingerprintSpec struct {
+	Settings          []H2SettingWire
+	ConnWindowUpdate  uint32
+	PseudoHeaderOrder string
+}
+
+// H2SettingWire is one SETTINGS entry on the wire.
+type H2SettingWire struct {
+	ID  uint16
+	Val uint32
 }
 
 // ClientHelloID maps the profile's TLS.ClientHelloID string to a uTLS

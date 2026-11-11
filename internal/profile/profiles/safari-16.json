@@ -4,5 +4,15 @@
     "tls": {
         "client_hello_id": "HelloSafari_16_0",
         "alpn": ["h2", "http/1.1"]
+    },
+    "h2": {
+        "settings": [
+            {"id": 1, "val": 4096},
+            {"id": 2, "val": 0},
+            {"id": 4, "val": 65535},
+            {"id": 6, "val": 16384}
+        ],
+        "window_update": 0,
+        "pseudo_header_order": "amsp"
     }
 }

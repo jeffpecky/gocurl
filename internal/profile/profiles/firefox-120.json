@@ -4,5 +4,14 @@
     "tls": {
         "client_hello_id": "HelloFirefox_120",
         "alpn": ["h2", "http/1.1"]
+    },
+    "h2": {
+        "settings": [
+            {"id": 1, "val": 65536},
+            {"id": 4, "val": 131072},
+            {"id": 5, "val": 16384}
+        ],
+        "window_update": 12517377,
+        "pseudo_header_order": "mpas"
     }
 }

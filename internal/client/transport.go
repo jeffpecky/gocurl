@@ -2,15 +2,20 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 
+	"github.com/ameshkov/gocurl/internal/client/tlsh2"
 	"github.com/ameshkov/gocurl/internal/config"
 	"github.com/ameshkov/gocurl/internal/output"
+	"github.com/ameshkov/gocurl/internal/profile"
 	utls "github.com/refraction-networking/utls"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
@@ -219,6 +224,13 @@ func (t *uTransport) roundTripTLS(r *http.Request) (*http.Response, error) {
 	}
 
 	if proto == "h2" {
+		// If the active profile carries an HTTP/2 fingerprint, use the
+		// fingerprint-exact single-request framer instead of the standard
+		// transport (whose SETTINGS/window/header order is fixed).
+		if fp := t.h2Fingerprint(); fp != nil {
+			return t.roundTripH2Fingerprint(conn, r, fp)
+		}
+
 		tr := &http2.Transport{DisableCompression: true}
 		clientConn, err := tr.NewClientConn(conn)
 		if err != nil {
@@ -231,6 +243,96 @@ func (t *uTransport) roundTripTLS(r *http.Request) (*http.Response, error) {
 
 	// HTTP/1.1 over the uTLS connection.
 	return h1RoundTrip(conn, r)
+}
+
+// h2Fingerprint returns the HTTP/2 fingerprint of the active profile, or nil
+// when impersonation is off or the profile has no H2 section.
+func (t *uTransport) h2Fingerprint() *profile.H2FingerprintSpec {
+	if t.d.cfg.Impersonate == "" || t.d.cfg.Impersonate == "none" {
+		return nil
+	}
+
+	prof, err := profile.Get(t.d.cfg.Impersonate)
+	if err != nil {
+		return nil
+	}
+
+	return prof.H2Fingerprint()
+}
+
+// roundTripH2Fingerprint sends the request over the established TLS conn
+// using the fingerprint-exact framer and converts the response back to
+// *http.Response.
+func (t *uTransport) roundTripH2Fingerprint(conn net.Conn, r *http.Request, fp *profile.H2FingerprintSpec) (*http.Response, error) {
+	var body []byte
+	if r.Body != nil {
+		var err error
+		body, err = io.ReadAll(r.Body)
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+	}
+
+	fields := make([]tlsh2.HeaderField, 0, len(r.Header))
+	// Header order: the raw -H/--header order from the config, followed by
+	// defaults the request carried that were not specified explicitly.
+	seen := map[string]bool{}
+	for _, raw := range t.d.cfg.RawHeaders {
+		name, value, _ := strings.Cut(raw, ":")
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		fields = append(fields, tlsh2.HeaderField{Name: name, Value: strings.TrimSpace(value)})
+	}
+	for name, vals := range r.Header {
+		if seen[strings.ToLower(name)] {
+			continue
+		}
+		seen[strings.ToLower(name)] = true
+		fields = append(fields, tlsh2.HeaderField{Name: strings.ToLower(name), Value: vals[0]})
+	}
+
+	h2req := &tlsh2.Request{
+		Method:       r.Method,
+		Scheme:       "https",
+		Authority:    r.Host,
+		Path:         r.URL.RequestURI(),
+		HeaderFields: fields,
+		Body:         body,
+	}
+
+	wireFp := &tlsh2.Fingerprint{
+		ConnWindowUpdate:  fp.ConnWindowUpdate,
+		PseudoHeaderOrder: fp.PseudoHeaderOrder,
+	}
+	for _, s := range fp.Settings {
+		wireFp.Settings = append(wireFp.Settings, tlsh2.Setting{ID: s.ID, Val: s.Val})
+	}
+
+	h2resp, err := tlsh2.Do(r.Context(), conn, wireFp, h2req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &http.Response{
+		StatusCode: h2resp.StatusCode,
+		Status:     fmt.Sprintf("%d %s", h2resp.StatusCode, http.StatusText(h2resp.StatusCode)),
+		Proto:      "HTTP/2.0",
+		ProtoMajor: 2,
+		ProtoMinor: 0,
+		Header:     make(http.Header, len(h2resp.HeaderFields)),
+		Body:       io.NopCloser(bytes.NewReader(h2resp.Body)),
+		ContentLength: int64(len(h2resp.Body)),
+		Request:    r,
+	}
+	for _, f := range h2resp.HeaderFields {
+		resp.Header.Add(f.Name, f.Value)
+	}
+
+	return resp, nil
 }
 
 // maxRedirects is the redirect limit matching curl's default (-L follows up
