@@ -3,16 +3,36 @@
     "browser": "Safari 16.0 (macOS)",
     "tls": {
         "client_hello_id": "HelloSafari_16_0",
-        "alpn": ["h2", "http/1.1"]
+        "alpn": [
+            "h2",
+            "http/1.1"
+        ]
     },
     "h2": {
         "settings": [
-            {"id": 1, "val": 4096},
-            {"id": 2, "val": 0},
-            {"id": 4, "val": 65535},
-            {"id": 6, "val": 16384}
+            {
+                "id": 1,
+                "val": 4096
+            },
+            {
+                "id": 2,
+                "val": 0
+            },
+            {
+                "id": 4,
+                "val": 65535
+            },
+            {
+                "id": 6,
+                "val": 16384
+            }
         ],
         "window_update": 0,
         "pseudo_header_order": "amsp"
+    },
+    "fingerprints": {
+        "ja3_hash": "773906b0efdefa24a7f2b8eb6985bf37",
+        "ja4": "t13d2014h2_a09f3c656075_14788d8d241b",
+        "akamai_fingerprint_hash": "8531711d094abb92e246c66e31f07e22"
     }
 }

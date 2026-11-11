@@ -1,0 +1,32 @@
+name: fingerprint selftest
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  # Manual runs for profile refreshes.
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    # Fingerprint verification is inherently network-dependent: echo
+    # endpoints can be down or rate-limit, which would fail the build for
+    # reasons unrelated to drift.  Make it a scheduled/weekly signal plus a
+    # manual gate rather than a hard every-commit gate.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build -o gocurl .
+
+      - name: Verify profile fingerprints
+        run: go run ./selftest
+
+      - name: Unit tests
+        run: go test ./internal/...

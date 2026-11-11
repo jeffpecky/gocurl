@@ -13,7 +13,7 @@ else
   archiveCmd=tar czpvf $(NAME)-$(BUILDNAME)-$(VERSION).tar.gz $(BUILDNAME)
 endif
 
-.PHONY: default check init
+.PHONY: default check init selftest capture
 default: build
 
 build: clean
@@ -35,6 +35,17 @@ test:
 
 # check runs linters and tests, it mirrors the CI quality gate.
 check: lint test
+
+# selftest verifies the live fingerprints of every profile against its
+# declared hashes (see selftest/).  Requires the binary to be built first.
+selftest: build
+	go run ./selftest
+
+# capture prints the live fingerprints of one profile as a JSON block ready
+# to paste into its profile file (selftest/), e.g.:
+#   make capture PROFILE=chrome-133
+capture: build
+	go run ./selftest/capture -capture $(PROFILE)
 
 # init installs the git pre-commit hook, see .githooks/pre-commit.
 init:

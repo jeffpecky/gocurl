@@ -3,17 +3,40 @@
     "browser": "Chrome 131",
     "tls": {
         "client_hello_id": "HelloChrome_131",
-        "alpn": ["h2", "http/1.1"]
+        "alpn": [
+            "h2",
+            "http/1.1"
+        ]
     },
     "h2": {
         "settings": [
-            {"id": 1, "val": 65536},
-            {"id": 2, "val": 0},
-            {"id": 3, "val": 1000},
-            {"id": 4, "val": 6291456},
-            {"id": 6, "val": 262144}
+            {
+                "id": 1,
+                "val": 65536
+            },
+            {
+                "id": 2,
+                "val": 0
+            },
+            {
+                "id": 3,
+                "val": 1000
+            },
+            {
+                "id": 4,
+                "val": 6291456
+            },
+            {
+                "id": 6,
+                "val": 262144
+            }
         ],
         "window_update": 15663105,
         "pseudo_header_order": "amsp"
+    },
+    "fingerprints": {
+        "ja4": "t13d1516h2_8daaf6152771_02713d6af862",
+        "akamai_fingerprint_hash": "c14c38ed6f422c2b0046de8ec45336a7",
+        "ja3_note": "unstable: Chrome 106+ shuffles extensions per handshake (real browser behavior); pinned by ja4 + akamai hash"
     }
 }

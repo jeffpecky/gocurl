@@ -34,6 +34,11 @@ type Profile struct {
 
 	// Default marks the profile used when --impersonate is omitted.
 	Default bool `json:"default"`
+
+	// Fingerprints are the declared fingerprint hashes of this profile,
+	// verified by the selftest (selftest/verify.go).  An empty map skips
+	// verification (e.g. for stale or experimental profiles).
+	Fingerprints map[string]string `json:"fingerprints,omitempty"`
 }
 
 // TLSProfile is the TLS section of a profile.

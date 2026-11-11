@@ -3,15 +3,32 @@
     "browser": "Firefox 120",
     "tls": {
         "client_hello_id": "HelloFirefox_120",
-        "alpn": ["h2", "http/1.1"]
+        "alpn": [
+            "h2",
+            "http/1.1"
+        ]
     },
     "h2": {
         "settings": [
-            {"id": 1, "val": 65536},
-            {"id": 4, "val": 131072},
-            {"id": 5, "val": 16384}
+            {
+                "id": 1,
+                "val": 65536
+            },
+            {
+                "id": 4,
+                "val": 131072
+            },
+            {
+                "id": 5,
+                "val": 16384
+            }
         ],
         "window_update": 12517377,
         "pseudo_header_order": "mpas"
+    },
+    "fingerprints": {
+        "ja3_hash": "b5001237acdf006056b409cc433726b0",
+        "ja4": "t13d1715h2_5b57614c22b0_5c2c66f702b0",
+        "akamai_fingerprint_hash": "1366b660f01a0a73d5578fc3c06dc011"
     }
 }

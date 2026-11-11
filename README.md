@@ -95,6 +95,10 @@ Use it the same way you use original curl.
 
 Also, you can use some new stuff that is not supported by curl.
 
+- `gocurl --impersonate chrome-133 https://tls.peet.ws/api/all` impersonates a
+  real browser's TLS and HTTP/2 fingerprint (ClientHello, SETTINGS order,
+  header order).  More on this [below](#impersonate).
+
 - `gocurl --json-output https://httpbin.agrd.workers.dev/get` write output in
   machine-readable format (JSON).
 - `gocurl --tls-split-hello 5:50 https://httpbin.agrd.workers.dev/get` split
@@ -112,6 +116,57 @@ Also, you can use some new stuff that is not supported by curl.
 - `gocurl wss://httpbin.agrd.workers.dev/ws` sends a WS upgrade request.
 - `gocurl -d "test message" wss://httpbin.agrd.workers.dev/ws` establishes a WS
   connection, sends the first message through it and reads the response.
+
+<a id="impersonate"></a>
+
+#### TLS/HTTP fingerprint impersonation
+
+`--impersonate <profile>` makes gocurl present the TLS ClientHello and HTTP/2
+fingerprint of a real browser instead of Go's default stack.  Available
+profiles (from `internal/profile/profiles/`):
+
+| Profile | Browser |
+| --- | --- |
+| `chrome-133` | Chrome 133 (default) |
+| `chrome-131` | Chrome 131 |
+| `chrome-120` | Chrome 120 |
+| `firefox-120` | Firefox 120 |
+| `firefox-105` | Firefox 105 |
+| `safari-16` | Safari 16.0 (macOS) |
+| `ios-14` | iOS 14 (Safari) |
+| `edge-85` | Edge 85 (Chromium) |
+
+```shell
+# Explicit profile:
+gocurl --impersonate firefox-120 https://tls.peet.ws/api/all
+
+# The default profile is used even without the flag:
+gocurl https://tls.peet.ws/api/all
+
+# Stock Go TLS stack (for comparison/debugging):
+gocurl --no-impersonate https://tls.peet.ws/api/all
+```
+
+A profile bundles a uTLS ClientHello preset (cipher suites, extension
+order, GREASE, key exchange) and an HTTP/2 fingerprint (SETTINGS values and
+order, connection WINDOW_UPDATE, pseudo-header order, and regular header
+order — the last one taken from the order of your `-H` flags).
+
+When a new browser version needs supporting, add a JSON file to
+`internal/profile/profiles/` — no code changes.  To pin and later re-verify
+its fingerprints:
+
+```shell
+make capture PROFILE=chrome-134   # prints the fingerprints block to paste
+# paste it into internal/profile/profiles/chrome-134.json, commit
+make selftest                     # fails the build if a fingerprint drifts
+```
+
+The `make selftest` gate (also wired as a GitHub workflow) hits the
+[fingerprint echo endpoint][peetws] through the real binary for every
+profile that declares hashes and fails on drift.
+
+[peetws]: https://tls.peet.ws/api/all
 
 <a id="ech"></a>
 
