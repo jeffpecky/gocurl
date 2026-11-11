@@ -16,8 +16,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ameshkov/gocurl/internal/ja4h"
 	"github.com/ameshkov/gocurl/internal/profile"
 )
 
@@ -47,84 +46,6 @@ type echoResponse struct {
 type sentFrame struct {
 	FrameType string   `json:"frame_type"`
 	Headers   []string `json:"headers"`
-}
-
-// ja4h computes the FoxIO JA4H fingerprint for an HTTP/2 request from the
-// HEADERS pseudo/regular header list.  Format:
-//
-//	{method[:2]}{20}{c|n}{r|n}{count:02d}{lang}_{headers_hash}_{cookie_name_hash}_{cookie_value_hash}
-//
-// count excludes Cookie and Referer; absent cookies hash as zeros.
-func ja4h(method string, headers []string) string {
-	var names, cookieNames, cookieValues []string
-	lang := ""
-	hasReferer := false
-	for _, h := range headers {
-		if strings.HasPrefix(h, ":") {
-			// Pseudo-header (":method: GET"): the name itself starts with ':'.
-			continue
-		}
-		name, value, _ := strings.Cut(h, ":")
-		name = strings.ToLower(strings.TrimSpace(name))
-		value = strings.TrimSpace(value)
-		switch name {
-		case "cookie":
-			for _, pair := range strings.Split(value, ";") {
-				k, v, _ := strings.Cut(strings.TrimSpace(pair), "=")
-				cookieNames = append(cookieNames, k)
-				cookieValues = append(cookieValues, v)
-			}
-		case "referer":
-			hasReferer = true
-		}
-		if name != "cookie" && name != "referer" {
-			names = append(names, name)
-			if name == "accept-language" {
-				lang = value
-			}
-		}
-	}
-
-	lang = strings.ToLower(lang)
-	lang = strings.ReplaceAll(lang, ";", ",")
-	lang = strings.ReplaceAll(lang, "-", "")
-	lang = strings.TrimSpace(strings.Split(lang, ",")[0])
-	if len(lang) > 4 {
-		lang = lang[:4]
-	}
-	lang += "0000"
-	lang = lang[:4]
-
-	count := len(names)
-	if count > 99 {
-		count = 99
-	}
-
-	r := "n"
-	if hasReferer {
-		r = "r"
-	}
-	c := "n"
-	if len(cookieNames) > 0 {
-		c = "c"
-	}
-
-	return fmt.Sprintf("ge%d%s%s%02d%s_%s_%s_%s",
-		ja4hVersion, c, r, count, lang,
-		shortHash(names), shortHash(cookieNames), shortHash(cookieValues))
-}
-
-// ja4hVersion is the JA4H HTTP/2 version token for a plain (https) request.
-const ja4hVersion = 20
-
-// shortHash is the first 12 hex chars of sha256 over the comma-joined list.
-func shortHash(list []string) string {
-	if len(list) == 0 {
-		return "000000000000"
-	}
-	sum := sha256.Sum256([]byte(strings.Join(list, ",")))
-
-	return hex.EncodeToString(sum[:])[:12]
 }
 
 func main() {
@@ -198,7 +119,7 @@ func verifyProfile(bin string, prof *profile.Profile, endpoint string) error {
 			if method == "" {
 				method = "GET"
 			}
-			actual["ja4h"] = ja4h(method, f.Headers)
+			actual["ja4h"] = ja4h.Fingerprint(method, f.Headers)
 			break
 		}
 	}

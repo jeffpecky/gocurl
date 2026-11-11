@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/ameshkov/gocurl/internal/ja4h"
 )
 
 func main() {
@@ -43,9 +45,14 @@ func main() {
 			JA3Hash string `json:"ja3_hash"`
 			JA4     string `json:"ja4"`
 		} `json:"tls"`
-		HTTP2 struct {
+		Method string `json:"method"`
+		HTTP2  struct {
 			AkamaiFingerprint     string `json:"akamai_fingerprint"`
 			AkamaiFingerprintHash string `json:"akamai_fingerprint_hash"`
+			SentFrames            []struct {
+				FrameType string   `json:"frame_type"`
+				Headers   []string `json:"headers"`
+			} `json:"sent_frames"`
 		} `json:"http2"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
@@ -56,6 +63,16 @@ func main() {
 	out := map[string]string{
 		"ja4":                     resp.TLS.JA4,
 		"akamai_fingerprint_hash": resp.HTTP2.AkamaiFingerprintHash,
+	}
+	for _, f := range resp.HTTP2.SentFrames {
+		if f.FrameType == "HEADERS" {
+			method := resp.Method
+			if method == "" {
+				method = "GET"
+			}
+			out["ja4h"] = ja4h.Fingerprint(method, f.Headers)
+			break
+		}
 	}
 	// Chrome 106+ shuffles extensions per handshake, so ja3_hash is only
 	// stable for browsers without the shuffler (Firefox, Safari, iOS).

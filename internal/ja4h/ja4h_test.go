@@ -1,10 +1,10 @@
-package main
+package ja4h
 
 import "testing"
 
-// TestJA4HChrome pins the JA4H algorithm against a real Chrome 133 capture
+// TestFingerprintChrome pins the algorithm against a real Chrome 133 capture
 // (https://tls.peet.ws/api/all, --impersonate chrome-133).
-func TestJA4HChrome(t *testing.T) {
+func TestFingerprintChrome(t *testing.T) {
 	headers := []string{
 		":method: GET",
 		":authority: tls.peet.ws",
@@ -26,13 +26,13 @@ func TestJA4HChrome(t *testing.T) {
 	}
 
 	const want = "ge20nn13enus_0c2c1d640f3e_000000000000_000000000000"
-	if got := ja4h("GET", headers); got != want {
-		t.Fatalf("ja4h = %s, want %s", got, want)
+	if got := Fingerprint("GET", headers); got != want {
+		t.Fatalf("Fingerprint = %s, want %s", got, want)
 	}
 }
 
-// TestJA4HCookies checks the cookie and referer axes.
-func TestJA4HCookies(t *testing.T) {
+// TestFingerprintCookies checks the cookie and referer axes.
+func TestFingerprintCookies(t *testing.T) {
 	headers := []string{
 		":method: GET",
 		"referer: https://example.com/",
@@ -40,11 +40,19 @@ func TestJA4HCookies(t *testing.T) {
 		"accept-language: en-GB,en;q=0.9",
 	}
 
-	got := ja4h("GET", headers)
+	got := Fingerprint("GET", headers)
 	if got[:13] != "ge20cr01engb_" {
 		t.Fatalf("prefix = %q, want ge20cr01engb_", got[:13])
 	}
 	if got[13:26] == "_00000000000" {
 		t.Fatal("cookie fields hashed as absent")
+	}
+}
+
+// TestFingerprintMethod covers the method truncation and lowercasing axis.
+func TestFingerprintMethod(t *testing.T) {
+	got := Fingerprint("DELETE", []string{"accept: */*"})
+	if got[:4] != "de20" {
+		t.Fatalf("prefix = %q, want de20", got[:4])
 	}
 }
