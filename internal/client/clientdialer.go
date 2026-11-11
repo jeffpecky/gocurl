@@ -17,6 +17,7 @@ import (
 	"github.com/ameshkov/gocurl/internal/client/websocket"
 	"github.com/ameshkov/gocurl/internal/config"
 	"github.com/ameshkov/gocurl/internal/output"
+	"github.com/ameshkov/gocurl/internal/profile"
 	"github.com/ameshkov/gocurl/internal/resolve"
 	utls "github.com/refraction-networking/utls"
 	"github.com/quic-go/quic-go"
@@ -116,10 +117,29 @@ func (d *clientDialer) DialQUIC(
 
 // handshakeTLS attempts to establish a TLS connection.
 //
-// Phase 0 spike: uses uTLS with a hardcoded Chrome ClientHelloSpec instead of
-// crypto/tls to prove the swap-point works.  This gets replaced by the profile
-// system in Phase 2.
+// Impersonation: when cfg.Impersonate is set (the default), the TLS layer is
+// uTLS with the profile's ClientHello preset; "none" falls back to stock
+// crypto/tls.
 func (d *clientDialer) handshakeTLS(conn net.Conn) (tlsConn net.Conn, err error) {
+	if d.cfg.Impersonate == "" || d.cfg.Impersonate == "none" {
+		tlsClient := tls.Client(conn, d.tlsConfig)
+		if err := tlsClient.HandshakeContext(context.Background()); err != nil {
+			return nil, fmt.Errorf("tls handshake: %w", err)
+		}
+
+		return tlsClient, nil
+	}
+
+	prof, err := profile.Get(d.cfg.Impersonate)
+	if err != nil {
+		return nil, err
+	}
+
+	helloID, err := prof.ClientHelloID()
+	if err != nil {
+		return nil, err
+	}
+
 	uCfg := &utls.Config{
 		ServerName:         d.tlsConfig.ServerName,
 		NextProtos:         d.tlsConfig.NextProtos,
@@ -127,12 +147,12 @@ func (d *clientDialer) handshakeTLS(conn net.Conn) (tlsConn net.Conn, err error)
 		RootCAs:            d.tlsConfig.RootCAs,
 		Rand:               d.tlsConfig.Rand,
 	}
-	uConn := utls.UClient(conn, uCfg, utls.HelloChrome_Auto)
+	uConn := utls.UClient(conn, uCfg, helloID)
 
-	// The Chrome preset hardcodes its own ALPN (h2, http/1.1).  When the user
-	// forces --http1.1/--http2, replace the preset's ALPN extension with the
-	// forced protocol list.
-	if len(d.tlsConfig.NextProtos) > 0 && !nextProtosEqual(uCfg.NextProtos, presetChromeALPN) {
+	// The browser presets hardcode their own ALPN.  When the user forces
+	// --http1.1/--http2, replace the preset's ALPN extension with the forced
+	// protocol list.
+	if len(d.tlsConfig.NextProtos) > 0 && !nextProtosEqual(d.tlsConfig.NextProtos, prof.TLS.ALPN) {
 		if err := setConnALPN(uConn, d.tlsConfig.NextProtos); err != nil {
 			return nil, err
 		}
@@ -153,9 +173,6 @@ func (d *clientDialer) handshakeTLS(conn net.Conn) (tlsConn net.Conn, err error)
 func (d *clientDialer) handshakeCTLS(conn net.Conn) (tlsConn net.Conn, err error) {
 	return cfcrypto.Handshake(conn, d.tlsConfig, d.resolver, d.cfg, d.out)
 }
-
-// presetChromeALPN is the ALPN list hardcoded in the uTLS Chrome presets.
-var presetChromeALPN = []string{"h2", "http/1.1"}
 
 // nextProtosEqual compares two ALPN protocol lists for exact order equality.
 func nextProtosEqual(a, b []string) bool {

@@ -211,7 +211,11 @@ func (t *uTransport) roundTripTLS(r *http.Request) (*http.Response, error) {
 
 	proto := ""
 	if u, ok := conn.(*utls.UConn); ok {
+		// uTLS defines its own ConnectionState type, which does not match
+		// the stdlib interface assertion below.
 		proto = u.ConnectionState().NegotiatedProtocol
+	} else if state, ok := conn.(interface{ ConnectionState() tls.ConnectionState }); ok {
+		proto = state.ConnectionState().NegotiatedProtocol
 	}
 
 	if proto == "h2" {

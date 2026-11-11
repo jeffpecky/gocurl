@@ -1,0 +1,8 @@
+{
+    "name": "chrome-131",
+    "browser": "Chrome 131",
+    "tls": {
+        "client_hello_id": "HelloChrome_131",
+        "alpn": ["h2", "http/1.1"]
+    }
+}

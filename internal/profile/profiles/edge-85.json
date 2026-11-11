@@ -1,0 +1,8 @@
+{
+    "name": "edge-85",
+    "browser": "Edge 85 (Chromium)",
+    "tls": {
+        "client_hello_id": "HelloEdge_85",
+        "alpn": ["h2", "http/1.1"]
+    }
+}

@@ -1,0 +1,10 @@
+{
+    "name": "chrome-133",
+    "browser": "Chrome 133",
+    "default": true,
+    "tls": {
+        "client_hello_id": "HelloChrome_133",
+        "alpn": ["h2", "http/1.1"]
+    },
+    "h2": null
+}

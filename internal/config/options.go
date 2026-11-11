@@ -61,6 +61,14 @@ type Options struct {
 	// MaxTime is the maximum total time in seconds for the whole operation.
 	MaxTime int `long:"max-time" description:"Maximum time in seconds that the whole operation is allowed to take." value-name:"<seconds>"`
 
+	// Impersonate selects the TLS/HTTP fingerprint profile.  If omitted, the
+	// default profile from the registry is used.  "none" disables
+	// impersonation (stock TLS).
+	Impersonate string `long:"impersonate" description:"TLS/HTTP fingerprint to impersonate (e.g. chrome-133, firefox-120). 'none' disables impersonation. Default profile when omitted." value-name:"<profile>"`
+
+	// NoImpersonate is the explicit opt-out of impersonation.
+	NoImpersonate bool `long:"no-impersonate" description:"Disable impersonation (equivalent to --impersonate none)." optional:"yes" optional-value:"true"`
+
 	// Headers is an array of HTTP headers (format is "header: value") to
 	// include in the request.
 	Headers []string `short:"H" long:"header" description:"Extra header to include in the request. Can be specified multiple times."`

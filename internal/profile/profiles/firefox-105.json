@@ -1,0 +1,8 @@
+{
+    "name": "firefox-105",
+    "browser": "Firefox 105",
+    "tls": {
+        "client_hello_id": "HelloFirefox_105",
+        "alpn": ["h2", "http/1.1"]
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "name": "firefox-120",
+    "browser": "Firefox 120",
+    "tls": {
+        "client_hello_id": "HelloFirefox_120",
+        "alpn": ["h2", "http/1.1"]
+    }
+}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	ctls "github.com/ameshkov/cfcrypto/tls"
+	"github.com/ameshkov/gocurl/internal/profile"
 )
 
 // Config is a strictly-typed and validated configuration structure which is
@@ -72,6 +73,11 @@ type Config struct {
 
 	// MaxTime is the maximum total time in seconds for the whole operation.
 	MaxTime int
+
+	// Impersonate is the name of the profile from the impersonation registry,
+	// or "none"/"" to disable impersonation.  When the flag is omitted, this
+	// is resolved to the default profile name (see profile.DefaultProfileName).
+	Impersonate string
 
 	// Headers is the HTTP headers that will be added to the request.
 	Headers http.Header
@@ -238,8 +244,7 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 		Silent:         opts.Silent,
 		Include:        opts.Include,
 		MaxTime:        opts.MaxTime,
-		OutputJSON:     opts.OutputJSON,
-		OutputPath:     opts.OutputPath,
+		OutputJSON:     opts.OutputJSON,		OutputPath:     opts.OutputPath,
 		ConnectTimeout: opts.ConnectTimeout,
 		Verbose:        opts.Verbose,
 		ForceHTTP11:    opts.HTTPv11,
@@ -355,6 +360,19 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 		cfg.ECH = true
 	}
 
+	// --impersonate / --no-impersonate resolution: "none" or the boolean flag
+	// disables impersonation; omitted flag falls back to the registry default.
+	if opts.NoImpersonate {
+		cfg.Impersonate = "none"
+	} else if opts.Impersonate != "" {
+		cfg.Impersonate = opts.Impersonate
+	} else {
+		cfg.Impersonate, err = profile.DefaultProfileName()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if len(opts.Experiments) > 0 {
 		cfg.Experiments, err = parseExperiments(opts.Experiments)
 		if err != nil {
@@ -363,8 +381,7 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 	}
 
 	// Parse and validate OHTTP options.
-	if opts.OHTTPGatewayURL != "" || opts.OHTTPKeysURL != "" {
-		// Both arguments must be specified together.
+	if opts.OHTTPGatewayURL != "" || opts.OHTTPKeysURL != "" {		// Both arguments must be specified together.
 		if opts.OHTTPGatewayURL == "" || opts.OHTTPKeysURL == "" {
 			return nil, fmt.Errorf("both --ohttp-gateway-url and --ohttp-keys-url must be specified")
 		}

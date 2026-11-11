@@ -1,0 +1,8 @@
+{
+    "name": "safari-16",
+    "browser": "Safari 16.0 (macOS)",
+    "tls": {
+        "client_hello_id": "HelloSafari_16_0",
+        "alpn": ["h2", "http/1.1"]
+    }
+}

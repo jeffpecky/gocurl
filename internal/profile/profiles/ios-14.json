@@ -1,0 +1,8 @@
+{
+    "name": "ios-14",
+    "browser": "iOS 14 (Safari)",
+    "tls": {
+        "client_hello_id": "HelloIOS_14",
+        "alpn": ["h2", "http/1.1"]
+    }
+}
