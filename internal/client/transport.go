@@ -482,7 +482,7 @@ func getMethod(cfg *config.Config) (method string) {
 		method = cfg.Method
 	} else if cfg.Head {
 		method = http.MethodHead
-	} else if cfg.Data != "" {
+	} else if bodyData(cfg) != "" || len(cfg.Form) > 0 {
 		method = http.MethodPost
 	} else {
 		method = http.MethodGet

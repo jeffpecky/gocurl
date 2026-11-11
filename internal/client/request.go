@@ -53,11 +53,6 @@ func NewRequest(cfg *config.Config) (req *http.Request, err error) {
 		return nil, err
 	}
 
-	// -F implies POST like in curl.
-	if len(cfg.Form) > 0 && method == http.MethodGet {
-		req.Method = http.MethodPost
-	}
-
 	addHeaders(req, cfg)
 	addBodyHeaders(req, cfg)
 
