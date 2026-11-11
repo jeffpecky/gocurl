@@ -237,27 +237,27 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 	}
 
 	cfg = &Config{
-		Method:         opts.Method,
-		Head:           opts.Head,
-		Insecure:       opts.Insecure,
-		Data:           opts.Data,
-		DataRaw:        opts.DataRaw,
-		DataBinary:     opts.DataBinary,
-		Form:           opts.Form,
-		Get:            opts.Get,
-		RemoteName:     opts.RemoteName,
-		Location:       opts.Location,
-		User:           opts.User,
-		Cookie:         opts.Cookie,
-		CookieJar:      opts.CookieJar,
-		Compressed:     opts.Compressed,
-		UserAgent:      opts.UserAgent,
-		Referer:        opts.Referer,
-		Silent:         opts.Silent,
-		Include:        opts.Include,
-		WriteOut:       opts.WriteOut,
-		MaxTime:        opts.MaxTime,
-		OutputJSON:     opts.OutputJSON,		OutputPath:     opts.OutputPath,
+		Method:     opts.Method,
+		Head:       opts.Head,
+		Insecure:   opts.Insecure,
+		Data:       opts.Data,
+		DataRaw:    opts.DataRaw,
+		DataBinary: opts.DataBinary,
+		Form:       opts.Form,
+		Get:        opts.Get,
+		RemoteName: opts.RemoteName,
+		Location:   opts.Location,
+		User:       opts.User,
+		Cookie:     opts.Cookie,
+		CookieJar:  opts.CookieJar,
+		Compressed: opts.Compressed,
+		UserAgent:  opts.UserAgent,
+		Referer:    opts.Referer,
+		Silent:     opts.Silent,
+		Include:    opts.Include,
+		WriteOut:   opts.WriteOut,
+		MaxTime:    opts.MaxTime,
+		OutputJSON: opts.OutputJSON, OutputPath: opts.OutputPath,
 		ConnectTimeout: opts.ConnectTimeout,
 		Verbose:        opts.Verbose,
 		ForceHTTP11:    opts.HTTPv11,
@@ -395,7 +395,7 @@ func ParseConfig(args []string) (cfg *Config, err error) {
 	}
 
 	// Parse and validate OHTTP options.
-	if opts.OHTTPGatewayURL != "" || opts.OHTTPKeysURL != "" {		// Both arguments must be specified together.
+	if opts.OHTTPGatewayURL != "" || opts.OHTTPKeysURL != "" { // Both arguments must be specified together.
 		if opts.OHTTPGatewayURL == "" || opts.OHTTPKeysURL == "" {
 			return nil, fmt.Errorf("both --ohttp-gateway-url and --ohttp-keys-url must be specified")
 		}

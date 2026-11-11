@@ -17,8 +17,8 @@ import (
 	"github.com/ameshkov/gocurl/internal/config"
 	"github.com/ameshkov/gocurl/internal/output"
 	"github.com/ameshkov/gocurl/internal/profile"
-	utls "github.com/refraction-networking/utls"
 	"github.com/quic-go/quic-go/http3"
+	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/http2"
 )
 
@@ -290,6 +290,17 @@ func (t *uTransport) profileDefaultHeaderOrder() []string {
 	return prof.HTTP.DefaultHeaders
 }
 
+// profileHeaderOrder returns the active profile's captured wire header order
+// (lowercase names) or nil when impersonation is off or the profile has none.
+func (t *uTransport) profileHeaderOrder() []string {
+	prof, err := profile.Get(t.d.cfg.Impersonate)
+	if err != nil || prof == nil || prof.HTTP == nil {
+		return nil
+	}
+
+	return prof.HTTP.HeaderOrder
+}
+
 // roundTripH2Fingerprint sends the request over the established TLS conn
 // using the fingerprint-exact framer and converts the response back to
 // *http.Response.
@@ -305,10 +316,11 @@ func (t *uTransport) roundTripH2Fingerprint(conn net.Conn, r *http.Request, fp *
 	}
 
 	fields := make([]tlsh2.HeaderField, 0, len(r.Header))
-	// Header wire order: user -H/--header order first, then the profile's
-	// default headers in their declared order, then any remaining headers
-	// the request carries (sorted for determinism — Go map iteration order
-	// must never reach the wire).
+	// Header wire order: the browser's captured order first (a real client
+	// sends user-agent mid-list, so the whole request header set is sequenced
+	// by the profile), then user -H order for headers the profile doesn't
+	// name, then anything else sorted for determinism — Go map iteration order
+	// must never reach the wire.
 	seen := map[string]bool{}
 	addField := func(raw string) {
 		name, value, _ := strings.Cut(raw, ":")
@@ -319,11 +331,29 @@ func (t *uTransport) roundTripH2Fingerprint(conn net.Conn, r *http.Request, fp *
 		seen[name] = true
 		fields = append(fields, tlsh2.HeaderField{Name: name, Value: strings.TrimSpace(value)})
 	}
+	// Value for a header already on the request (profile defaults, -A, -H)
+	// beats the profile's captured default value.
+	addFromRequest := func(raw string) {
+		name := strings.ToLower(strings.TrimSpace(strings.SplitN(raw, ":", 2)[0]))
+		if name == "" || seen[name] {
+			return
+		}
+		if values, ok := r.Header[http.CanonicalHeaderKey(name)]; ok && len(values) > 0 {
+			addField(name + ": " + values[0])
+			return
+		}
+		addField(raw)
+	}
+
+	order := t.profileHeaderOrder()
+	for _, name := range order {
+		addFromRequest(name + ":")
+	}
 	for _, raw := range t.d.cfg.RawHeaders {
 		addField(raw)
 	}
 	for _, raw := range t.profileDefaultHeaderOrder() {
-		addField(raw)
+		addFromRequest(raw)
 	}
 	// Anything the request still carries (e.g. headers added programmatically
 	// like Content-Type from -d) in deterministic order.
@@ -361,15 +391,15 @@ func (t *uTransport) roundTripH2Fingerprint(conn net.Conn, r *http.Request, fp *
 	}
 
 	resp := &http.Response{
-		StatusCode: h2resp.StatusCode,
-		Status:     fmt.Sprintf("%d %s", h2resp.StatusCode, http.StatusText(h2resp.StatusCode)),
-		Proto:      "HTTP/2.0",
-		ProtoMajor: 2,
-		ProtoMinor: 0,
-		Header:     make(http.Header, len(h2resp.HeaderFields)),
-		Body:       io.NopCloser(bytes.NewReader(h2resp.Body)),
+		StatusCode:    h2resp.StatusCode,
+		Status:        fmt.Sprintf("%d %s", h2resp.StatusCode, http.StatusText(h2resp.StatusCode)),
+		Proto:         "HTTP/2.0",
+		ProtoMajor:    2,
+		ProtoMinor:    0,
+		Header:        make(http.Header, len(h2resp.HeaderFields)),
+		Body:          io.NopCloser(bytes.NewReader(h2resp.Body)),
 		ContentLength: int64(len(h2resp.Body)),
-		Request:    r,
+		Request:       r,
 	}
 	for _, f := range h2resp.HeaderFields {
 		resp.Header.Add(f.Name, f.Value)

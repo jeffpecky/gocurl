@@ -33,7 +33,8 @@
     "fingerprints": {
         "ja3_hash": "773906b0efdefa24a7f2b8eb6985bf37",
         "ja4": "t13d2014h2_a09f3c656075_14788d8d241b",
-        "akamai_fingerprint_hash": "8531711d094abb92e246c66e31f07e22"
+        "akamai_fingerprint_hash": "8531711d094abb92e246c66e31f07e22",
+        "ja4h": "ge20nn05enus_494ff62b5e6e_000000000000_000000000000"
     },
     "http": {
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",

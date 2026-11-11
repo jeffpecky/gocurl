@@ -19,10 +19,6 @@
                 "val": 0
             },
             {
-                "id": 3,
-                "val": 1000
-            },
-            {
                 "id": 4,
                 "val": 6291456
             },
@@ -32,16 +28,17 @@
             }
         ],
         "window_update": 15663105,
-        "pseudo_header_order": "amsp"
+        "pseudo_header_order": "masp"
     },
     "fingerprints": {
         "ja4": [
             "t13d1516h2_8daaf6152771_02713d6af862",
             "t13d1517h2_8daaf6152771_b1ff8ab2d16f"
         ],
-        "akamai_fingerprint_hash": "c14c38ed6f422c2b0046de8ec45336a7",
+        "akamai_fingerprint_hash": "52d84b11737d980aef856699f885ca86",
         "ja3_note": "unstable: Chrome 106+ shuffles extensions per handshake (real browser behavior); pinned by ja4 + akamai hash",
-        "ja4_note": "two acceptable wire states: uTLS Chrome_120 conditionally omits the ALPS (application_settings_old) extension across handshakes"
+        "ja4_note": "two acceptable wire states: uTLS Chrome_120 conditionally omits the ALPS (application_settings_old) extension across handshakes",
+        "ja4h": "ge20nn13enus_0c2c1d640f3e_000000000000_000000000000"
     },
     "http": {
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -50,9 +47,29 @@
             "sec-ch-ua-mobile: ?0",
             "sec-ch-ua-platform: \"Windows\"",
             "upgrade-insecure-requests: 1",
-            "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "sec-fetch-site: none",
+            "sec-fetch-mode: navigate",
+            "sec-fetch-user: ?1",
+            "sec-fetch-dest: document",
             "accept-encoding: gzip, deflate, br, zstd",
-            "accept-language: en-US,en;q=0.9"
+            "accept-language: en-US,en;q=0.9",
+            "priority: u=0, i"
+        ],
+        "header_order": [
+            "sec-ch-ua",
+            "sec-ch-ua-mobile",
+            "sec-ch-ua-platform",
+            "upgrade-insecure-requests",
+            "user-agent",
+            "accept",
+            "sec-fetch-site",
+            "sec-fetch-mode",
+            "sec-fetch-user",
+            "sec-fetch-dest",
+            "accept-encoding",
+            "accept-language",
+            "priority"
         ]
     }
 }

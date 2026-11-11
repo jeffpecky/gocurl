@@ -93,6 +93,12 @@ type HTTPProfile struct {
 	// strings, in wire order).  User-supplied -H headers win; these fill in
 	// the ones the user didn't specify.
 	DefaultHeaders []string `json:"default_headers,omitempty"`
+
+	// HeaderOrder is the exact wire order the browser emits request headers
+	// in, lowercase names.  Headers the request carries but this list does not
+	// name are appended after, sorted.  Captured from a real browser request
+	// (see selftest/capture).
+	HeaderOrder []string `json:"header_order,omitempty"`
 }
 
 // registry is the parsed set of all embedded profiles, keyed by name.
